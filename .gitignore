@@ -1,0 +1,32 @@
+# Byte-compiled / cached / compiled files
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+.env/
+
+# Environment variables
+.env
+*.env
+
+# SQLite database file
+instance/*.db
+*.sqlite3
+
+# Migrations
+migrations/versions/
+
+# Pipenv files
+Pipfile.lock
+
+# Logs and local files
+*.log
+*.pot
+
+# IDE/editor-specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
