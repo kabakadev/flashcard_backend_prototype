@@ -5,7 +5,7 @@ from sqlalchemy import ForeignKey
 import re
 from config import db, bcrypt
 
-class User(db.Model, SerializerMixin):
+class User(db.Model):
     __tablename__ = 'users'
 
     id = db.Column(db.Integer, primary_key=True)
@@ -28,6 +28,20 @@ class User(db.Model, SerializerMixin):
 
     def check_password(self, password):
         return bcrypt.check_password_hash(self._password_hash, password)
+
+    # VALIDATIONS
+    @validates("email")
+    def validate_email(self, key, email):
+        email_regex = r'^[\w\.-]+@[\w\.-]+\.\w+$'
+        if not re.match(email_regex, email):
+            raise ValueError("Invalid email format")
+        return email.lower()  # Normalize to lowercase
+
+    @validates("username")
+    def validate_username(self, key, username):
+        if len(username) < 3 or len(username) > 50:
+            raise ValueError("Username must be between 3 and 50 characters")
+        return username
 
 class Deck(db.Model, SerializerMixin):
     __tablename__ = 'decks'
