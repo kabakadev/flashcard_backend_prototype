@@ -81,6 +81,9 @@ class Progress(db.Model, SerializerMixin):
     flashcard_id = db.Column(db.Integer, db.ForeignKey('flashcards.id'), nullable=False)
 
     study_count = db.Column(db.Integer, default=0, nullable=False)
+    correct_attempts = db.Column(db.Integer, default=0, nullable=False)  # New: Tracks correct answers
+    incorrect_attempts = db.Column(db.Integer, default=0, nullable=False)  # New: Tracks incorrect answers
+    total_study_time = db.Column(db.Float, default=0.0)  # New: Tracks total time spent on flashcard (in minutes)
     last_studied_at = db.Column(db.DateTime, server_default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
     next_review_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
 
@@ -90,3 +93,22 @@ class Progress(db.Model, SerializerMixin):
     serialize_rules = ('-user.progress', '-deck.progress')
 
     __table_args__ = (db.UniqueConstraint('user_id', 'flashcard_id', name='unique_user_flashcard_progress'),)
+
+class UserStats(db.Model, SerializerMixin):
+    __tablename__ = 'user_stats'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), unique=True, nullable=False)
+
+    weekly_goal = db.Column(db.Integer, default=0)  # Target number of flashcards per week
+    mastery_level = db.Column(db.Float, default=0.0)  # % of mastered cards
+    study_streak = db.Column(db.Integer, default=0)  # Days in a row studied
+    focus_score = db.Column(db.Float, default=0.0)  # Engagement metric (e.g., % of uninterrupted study sessions)
+    retention_rate = db.Column(db.Float, default=0.0)  # % of retained flashcards
+    cards_mastered = db.Column(db.Integer, default=0)  # Number of mastered flashcards
+    minutes_per_day = db.Column(db.Float, default=0.0)  # Avg. minutes studied per day
+    accuracy = db.Column(db.Float, default=0.0)  # Equivalent to mastery_level
+
+    user = db.relationship("User", backref=db.backref("stats", uselist=False, cascade="all, delete-orphan"))
+
+    serialize_rules = ('-user.stats',)
