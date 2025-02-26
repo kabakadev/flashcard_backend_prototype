@@ -10,6 +10,8 @@ from models import db, User, Deck, Progress,UserStats,Flashcard
 
 
 
+
+
 class FlashcardResource(Resource):
     @jwt_required()
     def get(self):
@@ -297,7 +299,25 @@ class Dashboard(Resource):
         total_correct = db.session.query(db.func.sum(Progress.correct_attempts)).filter_by(user_id=user_id).scalar() or 0
         total_attempts = db.session.query(db.func.sum(Progress.study_count)).filter_by(user_id=user_id).scalar() or 1
         mastery_level = (total_correct / total_attempts) * 100 if total_attempts > 0 else 0
-        
+
+        # Compute retention rate
+        retention_rate = mastery_level  # Retention rate is the same as mastery level in this case
+
+        # Compute focus score
+        total_study_time = db.session.query(db.func.sum(Progress.total_study_time)).filter_by(user_id=user_id).scalar() or 0
+        target_time_per_flashcard = 1  # Target time in minutes per flashcard
+        focus_score = 0
+
+        if total_flashcards_studied > 0:
+            average_time_per_flashcard = total_study_time / total_flashcards_studied
+            focus_score = (average_time_per_flashcard / target_time_per_flashcard) * 100
+
+        # Update user stats with calculated metrics
+        stats.mastery_level = mastery_level
+        stats.retention_rate = retention_rate
+        stats.focus_score = focus_score
+        db.session.commit()
+
         response_data = {
             "username": user.username,
             "total_flashcards_studied": total_flashcards_studied,
@@ -305,8 +325,8 @@ class Dashboard(Resource):
             "weekly_goal": stats.weekly_goal,
             "mastery_level": mastery_level,
             "study_streak": stats.study_streak,
-            "focus_score": stats.focus_score,
-            "retention_rate": stats.retention_rate,
+            "focus_score": focus_score,
+            "retention_rate": retention_rate,
             "cards_mastered": stats.cards_mastered,
             "minutes_per_day": stats.minutes_per_day,
             "accuracy": mastery_level,
@@ -314,7 +334,6 @@ class Dashboard(Resource):
         }
 
         return response_data, 200
-
 # Register the resource with Flask-RESTful
 api.add_resource(Dashboard, "/dashboard")
 
@@ -380,10 +399,6 @@ class ProtectedUser(Resource):
 api.add_resource(ProtectedUser, "/user")
 
 
-from flask_restful import Resource
-from flask import request
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from datetime import datetime, timedelta
 
 from models import db, Progress, Deck, Flashcard
 
@@ -422,91 +437,140 @@ class ProgressResource(Resource):
             for p in progress_entries
         ], 200
 
+class ProgressResource(Resource):
     @jwt_required()
     def post(self):
-        """Track progress when a user interacts with a flashcard."""
+        """
+        Track user progress for a flashcard.
+        """
         user_id = get_jwt_identity().get("id")
         data = request.get_json()
 
-        required_fields = ["deck_id", "flashcard_id", "was_correct", "time_spent"]
-        if not all(field in data for field in required_fields):
-            return {"error": "Deck ID, Flashcard ID, was_correct, and time_spent are required."}, 400
-
-        # Ensure the deck and flashcard exist
-        deck = Deck.query.filter_by(id=data["deck_id"], user_id=user_id).first()
-        flashcard = Flashcard.query.filter_by(id=data["flashcard_id"], deck_id=data["deck_id"]).first()
-
-        if not deck or not flashcard:
-            return {"error": "Deck or Flashcard not found."}, 404
-
-        # Check if progress already exists
-        progress = Progress.query.filter_by(user_id=user_id, flashcard_id=data["flashcard_id"]).first()
+        # Fetch or create progress entry
+        progress = Progress.query.filter_by(
+            user_id=user_id,
+            flashcard_id=data["flashcard_id"],
+        ).first()
 
         if not progress:
-            # First-time progress entry
             progress = Progress(
                 user_id=user_id,
-                deck_id=data["deck_id"],
                 flashcard_id=data["flashcard_id"],
-                study_count=1,
-                correct_attempts=1 if data["was_correct"] else 0,
-                incorrect_attempts=0 if data["was_correct"] else 1,
-                total_study_time=data["time_spent"],
-                review_status="learning" if data["was_correct"] else "new",
-                next_review_at=datetime.utcnow() + timedelta(days=1)
+                deck_id=data["deck_id"],
+                study_count=0,
+                total_study_time=0,
+                correct_attempts=0,
+                incorrect_attempts=0,
+                review_status='new',
+                is_learned=False
             )
             db.session.add(progress)
-        else:
-            # Update existing progress
-            progress.study_count += 1
-            progress.correct_attempts += 1 if data["was_correct"] else 0
-            progress.incorrect_attempts += 0 if data["was_correct"] else 1
-            progress.total_study_time += data["time_spent"]
-            progress.last_studied_at = datetime.utcnow()
 
-            # Adaptive review scheduling
-            if progress.correct_attempts >= 3:
-                progress.review_status = "reviewing"
-                progress.next_review_at = datetime.utcnow() + timedelta(days=3)
-            elif progress.correct_attempts >= 5:
-                progress.review_status = "mastered"
-                progress.next_review_at = datetime.utcnow() + timedelta(days=7)
-            elif progress.incorrect_attempts >= 3:
-                progress.review_status = "learning"
-                progress.next_review_at = datetime.utcnow() + timedelta(hours=12)
-            else:
-                progress.review_status = "new"
-                progress.next_review_at = datetime.utcnow() + timedelta(days=1)
+        # Update progress data
+        progress.study_count += 1
+        progress.total_study_time += data.get("time_spent", 0)
+        if data.get("was_correct"):
+            progress.correct_attempts += 1
+        else:
+            progress.incorrect_attempts += 1
+
+        # Update review status and mastery
+        if progress.correct_attempts >= 3:  # Example: 3 correct attempts to master
+            progress.review_status = "mastered"
+            progress.is_learned = True
+
+        db.session.commit()
+
+        # Update user stats
+        stats = UserStats.query.filter_by(user_id=user_id).first()
+        if not stats:
+            stats = UserStats(user_id=user_id)
+            db.session.add(stats)
+
+        # Recalculate metrics
+        total_correct = db.session.query(db.func.sum(Progress.correct_attempts)).filter_by(user_id=user_id).scalar() or 0
+        total_attempts = db.session.query(db.func.sum(Progress.study_count)).filter_by(user_id=user_id).scalar() or 1
+        stats.mastery_level = round((total_correct / total_attempts) * 100, 2)  # Round to 2 decimal places
+
+        # Update cards_mastered
+        stats.cards_mastered = Progress.query.filter_by(user_id=user_id, review_status="mastered").count()
+
+        # Update retention_rate (same as mastery_level in this case)
+        stats.retention_rate = stats.mastery_level
+
+        # Update focus_score (example calculation)
+        total_study_time = db.session.query(db.func.sum(Progress.total_study_time)).filter_by(user_id=user_id).scalar() or 0
+        target_time_per_flashcard = 1  # Target time in minutes per flashcard
+        if total_attempts > 0:
+            average_time_per_flashcard = total_study_time / total_attempts
+            stats.focus_score = round((average_time_per_flashcard / target_time_per_flashcard) * 100, 2)
 
         db.session.commit()
 
         return {
             "id": progress.id,
-            "deck_id": progress.deck_id,
+            "user_id": progress.user_id,
             "flashcard_id": progress.flashcard_id,
+            "deck_id": progress.deck_id,
             "study_count": progress.study_count,
             "correct_attempts": progress.correct_attempts,
             "incorrect_attempts": progress.incorrect_attempts,
             "total_study_time": progress.total_study_time,
-            "last_studied_at": progress.last_studied_at.isoformat(),
-            "next_review_at": progress.next_review_at.isoformat(),
-            "review_status": progress.review_status
+            "review_status": progress.review_status,
+            "is_learned": progress.is_learned,
         }, 200
-
-    @jwt_required()
-    def delete(self, progress_id):
-        """Delete a progress entry."""
-        user_id = get_jwt_identity().get("id")
-        progress = Progress.query.filter_by(id=progress_id, user_id=user_id).first()
-        
-        if not progress:
-            return {"error": "Progress entry not found."}, 404
-
-        db.session.delete(progress)
-        db.session.commit()
-
-        return {"message": "Progress entry deleted successfully."}, 200
+      
 
 
 # Add resource to API
 api.add_resource(ProgressResource, "/progress", "/progress/<int:progress_id>", "/progress/deck/<int:deck_id>", "/progress/flashcard/<int:flashcard_id>")
+class UserStatsResource(Resource):
+    @jwt_required()
+    def put(self):
+        """Update user stats, such as weekly goal."""
+        user_id = get_jwt_identity().get("id")
+        data = request.get_json()
+
+        # Fetch or create user stats
+        stats = UserStats.query.filter_by(user_id=user_id).first()
+        if not stats:
+            stats = UserStats(user_id=user_id)
+            db.session.add(stats)
+
+        # Update weekly goal if provided
+        if "weekly_goal" in data:
+            stats.weekly_goal = data["weekly_goal"]
+
+        # Update other stats if needed
+        if "mastery_level" in data:
+            stats.mastery_level = data["mastery_level"]
+        if "study_streak" in data:
+            stats.study_streak = data["study_streak"]
+        if "focus_score" in data:
+            stats.focus_score = data["focus_score"]
+        if "retention_rate" in data:
+            stats.retention_rate = data["retention_rate"]
+        if "cards_mastered" in data:
+            stats.cards_mastered = data["cards_mastered"]
+        if "minutes_per_day" in data:
+            stats.minutes_per_day = data["minutes_per_day"]
+        if "accuracy" in data:
+            stats.accuracy = data["accuracy"]
+
+        db.session.commit()
+
+        return {
+            "id": stats.id,
+            "user_id": stats.user_id,
+            "weekly_goal": stats.weekly_goal,
+            "mastery_level": stats.mastery_level,
+            "study_streak": stats.study_streak,
+            "focus_score": stats.focus_score,
+            "retention_rate": stats.retention_rate,
+            "cards_mastered": stats.cards_mastered,
+            "minutes_per_day": stats.minutes_per_day,
+            "accuracy": stats.accuracy,
+        }, 200
+
+# Register the resource with Flask-RESTful
+api.add_resource(UserStatsResource, "/user/stats")

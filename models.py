@@ -80,20 +80,39 @@ class Progress(db.Model, SerializerMixin):
     deck_id = db.Column(db.Integer, db.ForeignKey('decks.id'), nullable=False)
     flashcard_id = db.Column(db.Integer, db.ForeignKey('flashcards.id'), nullable=False)
 
+    # Fields with default values to ensure they are never None
     study_count = db.Column(db.Integer, default=0, nullable=False)
-    correct_attempts = db.Column(db.Integer, default=0, nullable=False)  # New: Tracks correct answers
-    incorrect_attempts = db.Column(db.Integer, default=0, nullable=False)  # New: Tracks incorrect answers
-    total_study_time = db.Column(db.Float, default=0.0)  # New: Tracks total time spent on flashcard (in minutes)
+    correct_attempts = db.Column(db.Integer, default=0, nullable=False)  # Tracks correct answers
+    incorrect_attempts = db.Column(db.Integer, default=0, nullable=False)  # Tracks incorrect answers
+    total_study_time = db.Column(db.Float, default=0.0, nullable=False)  # Tracks total time spent on flashcard (in minutes)
+
+    # Timestamps
     last_studied_at = db.Column(db.DateTime, server_default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
     next_review_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
 
-    review_status = db.Column(db.Enum('new', 'learning', 'reviewing', 'mastered', name="review_status"))
-    is_learned = db.Column(db.Boolean, default=False)
+    # Review status and learning status
+    review_status = db.Column(db.Enum('new', 'learning', 'reviewing', 'mastered', name="review_status"), default='new', nullable=False)
+    is_learned = db.Column(db.Boolean, default=False, nullable=False)
 
+    # Serialization rules
     serialize_rules = ('-user.progress', '-deck.progress')
 
+    # Unique constraint to ensure one progress entry per user-flashcard pair
     __table_args__ = (db.UniqueConstraint('user_id', 'flashcard_id', name='unique_user_flashcard_progress'),)
 
+    def __init__(self, user_id, deck_id, flashcard_id, study_count=0, correct_attempts=0, incorrect_attempts=0, total_study_time=0.0, review_status='new', is_learned=False):
+        """
+        Constructor to ensure all fields are initialized with default values.
+        """
+        self.user_id = user_id
+        self.deck_id = deck_id
+        self.flashcard_id = flashcard_id
+        self.study_count = study_count
+        self.correct_attempts = correct_attempts
+        self.incorrect_attempts = incorrect_attempts
+        self.total_study_time = total_study_time
+        self.review_status = review_status
+        self.is_learned = is_learned
 class UserStats(db.Model, SerializerMixin):
     __tablename__ = 'user_stats'
 
