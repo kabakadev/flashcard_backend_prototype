@@ -399,13 +399,12 @@ class ProtectedUser(Resource):
 api.add_resource(ProtectedUser, "/user")
 
 
-
-from models import db, Progress, Deck, Flashcard
-
 class ProgressResource(Resource):
     @jwt_required()
     def get(self, deck_id=None, flashcard_id=None):
-        """Retrieve progress for a specific deck or flashcard for the authenticated user."""
+        """
+        Retrieve progress for a specific deck or flashcard for the authenticated user.
+        """
         user_id = get_jwt_identity().get("id")
         
         query = Progress.query.filter_by(user_id=user_id)
@@ -437,7 +436,6 @@ class ProgressResource(Resource):
             for p in progress_entries
         ], 200
 
-class ProgressResource(Resource):
     @jwt_required()
     def post(self):
         """
@@ -519,8 +517,6 @@ class ProgressResource(Resource):
             "review_status": progress.review_status,
             "is_learned": progress.is_learned,
         }, 200
-      
-
 
 # Add resource to API
 api.add_resource(ProgressResource, "/progress", "/progress/<int:progress_id>", "/progress/deck/<int:deck_id>", "/progress/flashcard/<int:flashcard_id>")
