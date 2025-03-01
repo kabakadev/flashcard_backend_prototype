@@ -14,9 +14,6 @@ venv/
 instance/*.db
 *.sqlite3
 
-# Migrations
-migrations/versions/
-
 # Pipenv files
 Pipfile.lock
 
