@@ -131,11 +131,14 @@ class DecksResource(Resource):
                 "subject": deck.subject,
                 "category": deck.category,
                 "difficulty": deck.difficulty,
+                "is_default": deck.is_default,  # Include this field
                 "created_at": deck.created_at.isoformat(),
                 "updated_at": deck.updated_at.isoformat(),
             }
             for deck in decks
         ], 200
+ 
+ 
     @jwt_required()
     def post(self):
         """Create a new deck for the authenticated user."""
@@ -160,7 +163,8 @@ class DecksResource(Resource):
             subject=data["subject"],
             category=data["category"],
             difficulty=data["difficulty"],
-            user_id=user_id
+            user_id=user_id,
+            is_default=data.get("is_default", False)  # Include the is_default field
         )
 
         db.session.add(new_deck)
@@ -174,6 +178,7 @@ class DecksResource(Resource):
             "subject": new_deck.subject,
             "category": new_deck.category,
             "difficulty": new_deck.difficulty,
+            "is_default": new_deck.is_default,  # Include is_default in the response
             "user_id": new_deck.user_id,
             "created_at": new_deck.created_at.isoformat(),
             "updated_at": new_deck.updated_at.isoformat()
@@ -198,6 +203,7 @@ class DeckResource(Resource):
             "subject": deck.subject,
             "category": deck.category,
             "difficulty": deck.difficulty,
+            "is_default": deck.is_default,  # Include this field
             "created_at": deck.created_at.isoformat(),
             "updated_at": deck.updated_at.isoformat()
         }, 200
@@ -227,6 +233,7 @@ class DeckResource(Resource):
             "subject": deck.subject,
             "category": deck.category,
             "difficulty": deck.difficulty,
+            "is_default": deck.is_default,  # Include this field
             "updated_at": deck.updated_at.isoformat()
         }, 200
 
@@ -239,6 +246,9 @@ class DeckResource(Resource):
         deck = Deck.query.filter_by(id=deck_id, user_id=user_id).first()
         if not deck:
             return {"error": "Deck not found"}, 404
+         # Prevent deletion of default decks
+        if deck.is_default:
+            return {"error": "Default decks cannot be deleted"}, 403
 
         db.session.delete(deck)
         db.session.commit()
