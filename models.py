@@ -55,7 +55,6 @@ class Deck(db.Model, SerializerMixin):
     difficulty = db.Column(db.Integer)  # Range 1-5
     created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
     updated_at = db.Column(db.DateTime, server_default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
-    is_default = db.Column(db.Boolean, default=False)  # Add this field
     
     flashcards = db.relationship('Flashcard', backref='deck', cascade="all, delete-orphan")
 
