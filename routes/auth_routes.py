@@ -2,7 +2,7 @@ from flask import request, jsonify
 from flask_restful import Resource
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from config import db
-from models import User
+from models import User,DefaultDeck
 from sqlalchemy.exc import IntegrityError
 import re
 
@@ -30,6 +30,11 @@ class Signup(Resource):
             user = User(username=username, email=email)
             user.password_hash = password  # Hash password
             db.session.add(user)
+            db.session.commit()
+            # Assign default decks to the new user
+            default_decks = DefaultDeck.query.all()
+            for deck in default_decks:
+                user.default_decks.append(deck)
             db.session.commit()
             return {"message": "User registered successfully"}, 201
         except IntegrityError:

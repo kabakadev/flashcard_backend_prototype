@@ -2,7 +2,7 @@ from flask import request
 from flask_restful import Resource
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from config import db
-from models import Deck, User
+from models import Deck, User,user_default_decks,DefaultDeck
 
 class DecksResource(Resource):
     @jwt_required()
@@ -10,9 +10,12 @@ class DecksResource(Resource):
         """Get all decks for the authenticated user."""
         user_data = get_jwt_identity()
         user_id = user_data.get("id")
-        decks = Deck.query.filter_by(user_id=user_id).all()
+        # Fetch personal decks
+        personal_decks = Deck.query.filter_by(user_id=user_id).all()
+        default_decks = DefaultDeck.query.join(user_default_decks).filter(user_default_decks.c.user_id == user_id).all()
 
-        if not decks:
+
+        if not personal_decks:
             return {"message": "You have no decks yet."}, 200
 
         return [
@@ -25,8 +28,9 @@ class DecksResource(Resource):
                 "difficulty": deck.difficulty,
                 "created_at": deck.created_at.isoformat(),
                 "updated_at": deck.updated_at.isoformat(),
+                "is_default": isinstance(deck, DefaultDeck) 
             }
-            for deck in decks
+            for deck in personal_decks + default_decks
         ], 200
 
     @jwt_required()
@@ -75,7 +79,14 @@ class DeckResource(Resource):
         user_data = get_jwt_identity()
         user_id = user_data.get("id")
 
-        deck = Deck.query.filter_by(id=deck_id, user_id=user_id).first()
+        # Fetch the deck (either personal or default)
+        personal_deck = Deck.query.filter_by(id=deck_id, user_id=user_id).first()
+        default_deck = DefaultDeck.query.join(user_default_decks).filter(
+            DefaultDeck.id == deck_id,
+            user_default_decks.c.user_id == user_id
+        ).first()
+
+        deck = personal_deck or default_deck
         if not deck:
             return {"error": "Deck not found"}, 404
 
@@ -87,7 +98,8 @@ class DeckResource(Resource):
             "category": deck.category,
             "difficulty": deck.difficulty,
             "created_at": deck.created_at.isoformat(),
-            "updated_at": deck.updated_at.isoformat()
+            "updated_at": deck.updated_at.isoformat(),
+            "is_default": isinstance(deck, DefaultDeck)
         }, 200
 
     @jwt_required()

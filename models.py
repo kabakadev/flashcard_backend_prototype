@@ -47,6 +47,7 @@ class User(db.Model):
     _password_hash = db.Column("password_hash", db.String(255), nullable=False)
 
     decks = db.relationship('Deck', backref='user', cascade="all, delete-orphan")
+    default_decks = db.relationship('DefaultDeck', secondary=user_default_decks, backref='users')
     progress = db.relationship('Progress', backref='user', cascade="all, delete-orphan")
 
     serialize_rules = ('-decks.user', '-progress.user')
