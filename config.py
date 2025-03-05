@@ -24,4 +24,29 @@ api = Api(app)
 
 
 CORS(app, supports_credentials=True, resources={r"/*": {"origins": "*"}})
+# Default decks template
+DEFAULT_DECKS_TEMPLATE = [
+    {
+        "title": "Default Deck 1",
+        "description": "This is a default deck",
+        "subject": "General",
+        "category": "Default",
+        "difficulty": 1,
+        "flashcards": [
+            {"front_text": "What is 2 + 2?", "back_text": "4"},
+            {"front_text": "What is the capital of France?", "back_text": "Paris"}
+        ]
+    },
+    {
+        "title": "Default Deck 2",
+        "description": "This is another default deck",
+        "subject": "General",
+        "category": "Default",
+        "difficulty": 2,
+        "flashcards": [
+            {"front_text": "What is 3 * 3?", "back_text": "9"},
+            {"front_text": "What is the largest planet?", "back_text": "Jupiter"}
+        ]
+    }
+]
 

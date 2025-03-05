@@ -4,6 +4,39 @@ from sqlalchemy_serializer import SerializerMixin
 from sqlalchemy import ForeignKey
 import re
 from config import db, bcrypt
+# Association table for many-to-many relationship between users and default decks
+user_default_decks = db.Table(
+    'user_default_decks',
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('default_deck_id', db.Integer, db.ForeignKey('default_decks.id'), primary_key=True)
+)
+class DefaultDeck(db.Model, SerializerMixin):
+    __tablename__ = 'default_decks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    subject = db.Column(db.String(50))
+    category = db.Column(db.String(50))
+    difficulty = db.Column(db.Integer)  # Range 1-5
+    created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
+    updated_at = db.Column(db.DateTime, server_default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+
+    flashcards = db.relationship('DefaultFlashcard', backref='default_deck', cascade="all, delete-orphan")
+
+    serialize_rules = ('-flashcards.default_deck',)
+
+class DefaultFlashcard(db.Model, SerializerMixin):
+    __tablename__ = 'default_flashcards'
+
+    id = db.Column(db.Integer, primary_key=True)
+    default_deck_id = db.Column(db.Integer, db.ForeignKey('default_decks.id'), nullable=False)
+    front_text = db.Column(db.Text, nullable=False)
+    back_text = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
+    updated_at = db.Column(db.DateTime, server_default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+
+    serialize_rules = ('-default_deck.flashcards',)
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -55,6 +88,7 @@ class Deck(db.Model, SerializerMixin):
     difficulty = db.Column(db.Integer)  # Range 1-5
     created_at = db.Column(db.DateTime, server_default=db.func.current_timestamp())
     updated_at = db.Column(db.DateTime, server_default=db.func.current_timestamp(), onupdate=db.func.current_timestamp())
+    is_default = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
     
     flashcards = db.relationship('Flashcard', backref='deck', cascade="all, delete-orphan")
 
